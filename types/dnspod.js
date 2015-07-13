@@ -1,11 +1,3 @@
-/*
-名称：honeycombs_ddns
-ID：10337
-Token：53cb7f0b0305304bff41264778b7bd98
-创建时间：2015-07-10 16:43:57
-curl http://dnsapi.cn/Domain.List -d ‘login_token=10337,53cb7f0b0305304bff41264778b7bd98&format=json’
-*/
-
 var request = require("request");
 // require('request').debug = true;
 var dns = require("dns");
