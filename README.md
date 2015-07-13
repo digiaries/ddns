@@ -2,5 +2,5 @@
 被动 DDNS 解析（什么鬼。。。）
 
 ## API
-	/ddns/:type
-	/ddns/:type/status
+	[GET] /ddns/:type?tk=<token>&ts=<timestamp>
+	[GET] /ddns/:type/status
