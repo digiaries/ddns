@@ -8,6 +8,16 @@
 	- conf
 	- conf/config.json
 
+config.json 文件包含支持站点的相关配置信息，如：
+```
+{
+	"dnspod":{
+		"appid":10086
+		,"Token":"53cb7f098dask23923934778b7bd98"
+		,"name":"test_ddns"
+	}
+}
+```
 
 # API
 	[GET] /ddns/:type?tk=<token>&ts=<timestamp>
