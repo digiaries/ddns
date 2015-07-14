@@ -4,6 +4,7 @@ var dns = require("dns");
 var qs = require("querystring");
 
 var crypto = require("crypto");
+var logger;
 
 /**
  * 封装一个 promise 形式的 request 方法
@@ -41,7 +42,9 @@ function getJsonHeader () {
 	};
 }
 
-function FreshDns (conf) {
+function noop () {}
+
+function FreshDns (conf,cb) {
 
 	for (var n in conf) {
 		switch (n) {
@@ -68,6 +71,8 @@ function FreshDns (conf) {
 	this.freshStatus = {};
 	this.o_ip = "";
 	this.n_ip = "";
+
+	this.cb = cb || noop;
 
 	this.hosts.forEach(function (host) {
 		this.setStatus(host, false)
@@ -96,12 +101,12 @@ FDP.getIp = function (host) {
 	var p = new Promise(function (resolve, reject) {
 		if (me.o_ip && me.n_ip) {
 			if (me.debug) {
-				console.log("IP ready.");
+				logger.log("IP ready.");
 			};
 			resolve();
 		} else {
 			if (me.debug) {
-				console.log("Get IP.");
+				logger.log("Get IP.");
 			};
 			requestWapper({
 				"url": "http://members.3322.org/dyndns/getip"
@@ -109,18 +114,18 @@ FDP.getIp = function (host) {
 			.then(function (re) {
 				me.n_ip = re;
 				if (me.debug) {
-					console.log('New IP >>> ',me.n_ip);
+					logger.log('New IP >>> ',me.n_ip);
 				}
 				dns.lookup(host, function (err, add) {
 					me.o_ip = add || '';
 					if (err) {
 						if (me.debug) {
-							console.log(err);
+							logger.log(err);
 						}
 						reject(err);
 					} else {
 						if (me.debug) {
-							console.log('Old IP >>> ',me.o_ip);
+							logger.log('Old IP >>> ',me.o_ip);
 						}
 						resolve();
 					}
@@ -136,7 +141,7 @@ FDP.fresh = function (host) {
 
 	this.getIp(host)
 		.then(function () {
-			console.log('Next');
+			logger.log('Next');
 			if (me.n_ip !== me.o_ip) {
 				me.updateDns(host);
 			} else {
@@ -195,7 +200,7 @@ FDP.updateDns = function (host) {
 				})
 				.then(function (re) {
 					if (me.debug){
-						console.log(re);
+						logger.log(re);
 					}
 					var r_resp = getJson(re);
 					var records = [];
@@ -264,11 +269,12 @@ FDP.updateDns = function (host) {
 		return p;
 	})
 	.then(function (re) {
-		console.log(re);
+		logger.log(re);
+		me.cb(re);
 	})
 	.catch(function(reason){
-		console.log("Fail...");
-		console.log(reason);
+		logger.log("Fail...");
+		logger.log(reason);
 	});
 }
 
@@ -304,12 +310,37 @@ function getMd5 () {
 		.digest("hex");
 }
 
-function go (req) {
+function go (req, conf, app) {
 	var status = false;
-	if (req.query.tk && req.query.ts) {
+	var conf = conf || {};
+	var chkAuth = conf.auth || false;
+	var query = req.query;
+	var check = true;
+
+	if (!logger) {
+		logger = app && app.get("logger") || console;
+	}
+
+	if (chkAuth && query.tk && query.ts) {
 		var skey = getMd5(10337,"53cb7f0b0305304bff41264778b7bd98",req.ts,"digiaries@hotmail.com");
-		console.log(skey);
-		status = req.query.tk === skey;
+		if (query.tk !== skey) {
+			check = false;
+		}
+	}
+
+	if (check && conf.appid && conf.token) {
+		var dnsConf = {
+			"l":conf.hosts
+			,"tid":[conf.appid]
+			,"token":[conf.token]
+		};
+		if (query.debug) {
+			dnsConf.debug = 1;
+		}
+		var fd = new FreshDns(dnsConf,function (re){
+			logger.log(re);
+			fd = null;
+		});
 	}
 
 	return status;
