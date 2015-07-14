@@ -20,5 +20,5 @@ config.json 文件包含支持站点的相关配置信息，如：
 ```
 
 ## API
-	[GET] /ddns/:type?tk=<token>&ts=<timestamp>
+	[GET] /ddns/:type?tk=<token>&ts=<timestamp>`/ddns/dnspod?tk=ae4e8c43f0538f554cb8b2ce0bc8a5b5&ts=10086`
 	[GET] /ddns/:type/status
