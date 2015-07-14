@@ -7,6 +7,9 @@ var CONF = {
 	,"resTimeout":4000
 	,"port":40001
 	,"isProd":false
+	,"data":{
+		"ddns":"./data/ddns.json"
+	}
 };
 
 if (priveConf) {
