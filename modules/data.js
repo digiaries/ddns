@@ -1,6 +1,11 @@
 var fs = require("fs");
 var config = require("../config");
 
+function promiseFactory(handler) {
+	var p = new Promise(handler);
+	return p;
+}
+
 /**
  * 获取某个数据集或数据集中的某个key值
  * @param  {String} type 数据集
@@ -8,13 +13,12 @@ var config = require("../config");
  * @return {Object}      Promise 对象
  */
 function get(type, key) {
-	var p = new Promise(function (resolve, reject){
+	return promiseFactory(function (resolve, reject){
 		if (!config.data[type]) {
 			reject();
 			return;
 		}
 		fs.readFile(config.data[type],{"encoding":"utf8"},function (err, file) {
-			var type = req.params.type;
 			if (err || !file) {
 				reject(err,file);
 			} else {
@@ -24,7 +28,6 @@ function get(type, key) {
 			}
 		});
 	});
-	return p;
 }
 
 /**
@@ -34,7 +37,7 @@ function get(type, key) {
  * @return {Object}           Promise 对象
  */
 function writeFile (file_path, filedata) {
-	var p = new Promise(function (resolve, reject){
+	return promiseFactory(function (resolve, reject){
 		fs.writeFile(file_path, JSON.stringify(filedata),function (err) {
 			if (err) {
 				reject();
@@ -43,24 +46,25 @@ function writeFile (file_path, filedata) {
 			}
 		});
 	});
-	return p;
 }
 
 /**
  * 检测文件，如有数据则写入数据
  * @param  {String} file_path 文件路径
+ * @param  {String} type      数据集名称
  * @param  {String} key       数据key
  * @param  {Object} data      数据
  * @return {Object}           Promise 对象
  */
-function touch (file_path, key, data) {
-	var p = new Promise(function (resolve, reject) {
+function touch (file_path, type, key, data) {
+	return promiseFactory(function (resolve, reject) {
 		fs.exists(file_path, function(exists){
 			if (exists) {
 				if (key && data) {
 					// 有数据则写入
 					get(type)
 						.then(function (filedata) {
+							console.log(filedata);
 							filedata[key] = filedata[key] || {};
 							filedata[key] = data;
 							writeFile(file_path, filedata)
@@ -97,7 +101,6 @@ function touch (file_path, key, data) {
 			}
 		});
 	});
-	return p;
 }
 
 /**
@@ -108,10 +111,10 @@ function touch (file_path, key, data) {
  * @return {Object}       Promise 对象
  */
 exports.set = function (type, key, data) {
-	var p = new Promise(function (resolve, reject) {
+	return promiseFactory(function (resolve, reject) {
 		var file_path = config.data[type];
 		if (file_path) {
-			touch(file_path,key,data)
+			touch(file_path, type, key, data)
 				.then(function (){
 					resolve();
 				})
@@ -124,7 +127,6 @@ exports.set = function (type, key, data) {
 		}
 		
 	});
-	return p;
 }
 
 exports.get = get;
