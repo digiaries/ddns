@@ -86,7 +86,7 @@ files.forEach(function(item) {
 
 // 卖萌用的
 app.get(/^\/$/, function(req, res){
-	res.send("hello world");
+	res.send("In the pipe,five by five.");
 });
 
 // 执行某个类型的 ddns
