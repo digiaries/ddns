@@ -5,6 +5,17 @@ var express = require("express")
 	,errorHandler = require("errorhandler")
 	,log = require("./modules/log");
 
+// nodejs 版本
+var nodeVer = process.version;
+nodeVer = nodeVer.split(".");
+nodeVer[1] = Number(nodeVer[1]);
+
+// 如果node的版本小于12，则手动导入 promise 模块
+if (nodeVer[1] < 12) {
+    global.Promise = require("promise");
+}
+nodeVer = null;
+
 // 日志
 var theLog = new log({
 	"name":config.name
@@ -73,27 +84,31 @@ files.forEach(function(item) {
 	}
 });
 
-
+// 卖萌用的
 app.get(/^\/$/, function(req, res){
 	res.send("hello world");
 });
 
+// 执行某个类型的 ddns
 app.get("/ddns/:type", function(req, res){
 	console.log(req.params);
 	var handler = ddnsTypes[req.params.type];
 	var status = false;
 	if (handler) {
-		status = handler(req);
+		status = handler(req,config[req.params.type],app);
 	}
 	res.status(200).send("ddns   ",status)
 });
 
+// 某个 ddns 的状态
 app.get("/ddns/:type/status", function(req, res){
 	console.log(req.params);
 	res.send("ddns status");
 });
 
 app.use(errorHandler());
+
+module.exports = app;
 
 if (require.main === module) {
 	app.listen(config.port);
