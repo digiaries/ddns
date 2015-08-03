@@ -7,6 +7,7 @@
 	- private/log
 	- conf
 	- conf/config.json
+	- data
 
 config.json 文件包含支持站点的相关配置信息，如：
 ```
