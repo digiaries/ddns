@@ -5,10 +5,19 @@ var express = require("express")
 	,errorHandler = require("errorhandler")
 	,log = require("./modules/log");
 
+console.log("Starting server.\n");
+
+console.log("Server config:");
+Object.keys(config).forEach(function (key) {
+	console.log("\t%s : %s",key,config[key]);
+});
+
 // nodejs 版本
 var nodeVer = process.version;
 nodeVer = nodeVer.split(".");
 nodeVer[1] = Number(nodeVer[1]);
+
+console.log("Nodejs version : %s ",nodeVer[1]);
 
 // 如果node的版本小于12，则手动导入 promise 模块
 if (nodeVer[1] < 12) {
@@ -22,7 +31,7 @@ var theLog = new log({
 	,"level":config.isProd ? "warn" : "all"
 });
 var logger = theLog.getLogger("global");
-
+app.set("log",theLog);
 app.set("logger",logger);
 
 
@@ -52,9 +61,9 @@ app.use(function(req, res, next){
 	next();
 });
 
-var url = require("url");
+// var url = require("url");
 // 修复post数据
-app.use (function(req, res, next) {
+/*app.use (function(req, res, next) {
 	req.rawBody = "";
 	req.setEncoding("utf-8");
 	req.on("data",function(chunk){
@@ -66,9 +75,10 @@ app.use (function(req, res, next) {
 		tmp = null;
 		next();
 	});
-});
+});*/
 
 // 加载所有支持的类型
+console.log("DDNS Types:");
 var path = require("path");
 var fs = require("fs");
 var _p = path.resolve("./types");
@@ -78,6 +88,8 @@ files.forEach(function(item) {
 	var tmpPath = _p + "/" + item;
 	var stats = fs.statSync(tmpPath);
 	if (!stats.isDirectory()) {
+		console.log("\t %s",item);
+
 		ddnsTypes.__defineGetter__(item.replace(".js", ""), function () {
 			return require(path.resolve(tmpPath));
 		});
@@ -91,13 +103,13 @@ app.get(/^\/$/, function(req, res){
 
 // 执行某个类型的 ddns
 app.get("/ddns/:type", function(req, res){
-	console.log(req.params);
 	var handler = ddnsTypes[req.params.type];
 	var status = false;
 	if (handler) {
-		status = handler(req,config[req.params.type],app);
+		status = handler(req,res,config[req.params.type],app);
+	}else{
+		res.status(200).send("ddns   ",status)
 	}
-	res.status(200).send("ddns   ",status)
 });
 
 // 某个 ddns 的状态
@@ -113,7 +125,7 @@ module.exports = app;
 if (require.main === module) {
 	app.listen(config.port);
 	console.log(
-		"DDNS [%s] online,listening on port %d"
+		"\nDDNS [%s] online,listening on port %d"
 		,config.isProd ? "PRODUCTION" : "DEVELOPMENT"
 		,config.port
 	);
