@@ -31,3 +31,5 @@ node_modules
 conf/*
 
 data/*
+
+test.js
