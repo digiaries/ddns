@@ -2,16 +2,26 @@ var request = require("request");
 // require('request').debug = true;
 var dns = require("dns");
 var qs = require("querystring");
-
+var data = require("../modules/data");
+var common = require("../modules/common");
 var crypto = require("crypto");
 var logger;
+
+/**
+ * 伪数组转为数组的方法
+ * @param  {Object} dat 原始数据
+ * @return {Array}      数组对象
+ */
+function toArray (dat) {
+	return Array.prototype.slice.call(dat);
+}
 
 /**
  * 封装一个 promise 形式的 request 方法
  * @return {Promise} pormise链式对象
  */
 function requestWapper () {
-	var args = Array.prototype.slice.call(arguments);
+	var args = toArray(arguments);
 	var p = new Promise(function (resolve, reject) {
 		args.push(function (err, res, body) {
 			if (err) {
@@ -25,16 +35,26 @@ function requestWapper () {
 	return p;
 }
 
+/**
+ * 尝试格式化 json 数据
+ * @param  {String} str 原始数据
+ * @return {Object}     json 数据对象
+ */
 function getJson (str) {
 	var data;
 	try {
 		data = JSON.parse(str);
 	}catch(e){
+		logger.error(e);
 		data = null;
 	}
 	return data;
 }
 
+/**
+ * 设置请求到接口的请求头
+ * @return {Object} 请求头设定
+ */
 function getJsonHeader () {
 	return {
 		"User-Agent":"HoneycombsDdns/0.1(digiaries@hotmail.com)"
@@ -42,8 +62,16 @@ function getJsonHeader () {
 	};
 }
 
+/**
+ * 空函数
+ */
 function noop () {}
 
+/**
+ * 刷新的构造函数
+ * @param {Object}   conf 配置对象
+ * @param {Function} cb   完成后的回调函数
+ */
 function FreshDns (conf,cb) {
 
 	for (var n in conf) {
@@ -56,25 +84,32 @@ function FreshDns (conf,cb) {
 				this.tid = conf[n] && conf[n][0] || "";
 			break;
 
-			case "tocken":
-				this.tocken = conf[n] && conf[n][0] || "";
+			case "token":
+				this.token = conf[n] && conf[n][0] || "";
 			break;
 
 			case "debug":
-				this.debug = true;
+				this.showDebug = true;
+			break;
+
+			case "ip":
+				this.n_ip = conf[n];
 			break;
 		}
 	}
 
-	this.login_token = this.tid+","+this.tocken;
+	this.req = conf.req || null;
+
+	this.login_token = this.tid+","+this.token;
 
 	this.freshStatus = {};
 	this.o_ip = "";
-	this.n_ip = "";
+	this.n_ip = this.n_ip || "";
 
 	this.cb = cb || noop;
 
 	this.hosts.forEach(function (host) {
+		this.debug("The host >>> ",host);
 		this.setStatus(host, false)
 			.fresh(host);
 	}.bind(this));
@@ -82,6 +117,10 @@ function FreshDns (conf,cb) {
 
 var FDP = FreshDns.prototype;
 
+/**
+ * 默认配置
+ * @type {Object}
+ */
 FDP.config = {
 	"url":{
 		"domainInfo":"Domain.Info"
@@ -91,42 +130,58 @@ FDP.config = {
 	,"dnspodApi":"https://dnsapi.cn/"
 };
 
+/**
+ * 当前更新状态
+ * @param {String}  host   域名
+ * @param {Boolean} status
+ */
 FDP.setStatus = function (host, status) {
 	this.freshStatus[host] = status;
 	return this;
+};
+
+function getNewIp(FD){
+	if (FD && FD.n_ip) {
+		// 有指定则直接返回
+		return Promise.resolve(FD.n_ip);
+	}
+	if (FD && FD.req) {
+		var ip = common.getIp(FD.req);
+		if (ip) {
+			return Promise.resolve(ip);
+		}
+	}
+	return requestWapper({
+		"url": "http://members.3322.org/dyndns/getip"
+	});
 }
 
+/**
+ * 获取新旧ip
+ * @param  {String} host 域名
+ * @return {Object}      Promise 对象
+ */
 FDP.getIp = function (host) {
 	var me = this;
 	var p = new Promise(function (resolve, reject) {
 		if (me.o_ip && me.n_ip) {
-			if (me.debug) {
-				logger.log("IP ready.");
-			};
+			me.debug("IP ready.");
 			resolve();
 		} else {
-			if (me.debug) {
-				logger.log("Get IP.");
-			};
-			requestWapper({
-				"url": "http://members.3322.org/dyndns/getip"
-			})
+			me.debug("Get IP.");
+			getNewIp(this)
 			.then(function (re) {
-				me.n_ip = re;
-				if (me.debug) {
-					logger.log('New IP >>> ',me.n_ip);
-				}
+				me.n_ip = String(re).trim();
+				me.debug('New IP >>> ',me.n_ip);
 				dns.lookup(host, function (err, add) {
 					me.o_ip = add || '';
 					if (err) {
 						if (me.debug) {
-							logger.log(err);
+							logger.debug(err);
 						}
 						reject(err);
 					} else {
-						if (me.debug) {
-							logger.log('Old IP >>> ',me.o_ip);
-						}
+						me.debug('Old IP >>> ',me.o_ip);
 						resolve();
 					}
 				});
@@ -134,26 +189,41 @@ FDP.getIp = function (host) {
 		}	
 	});
 	return p;
-}
+};
 
+/**
+ * 刷新某个 host
+ * @param  {String}    host 域名
+ * @return {Undefined}      无返回值
+ */
 FDP.fresh = function (host) {
 	var me = this;
-
+	this.debug("Fresh : ",host);
 	this.getIp(host)
 		.then(function () {
-			logger.log('Next');
+			me.debug('Get IP Done,Next Setp.');
 			if (me.n_ip !== me.o_ip) {
 				me.updateDns(host);
 			} else {
 				me.setStatus(host, true);
 			}
 		});
-}
+};
 
+/**
+ * 获取 dnspod 的相关请求 api
+ * @param  {String} type api 名称
+ * @return {String}      真正的 API 地址
+ */
 FDP.getReqUrl = function (type) {
 	return this.config.dnspodApi + this.config.url[type];
-}
+};
 
+/**
+ * 生成 post 数据
+ * @param  {Object} dat 要发送到接口的数据
+ * @return {String}     请求数据字符串
+ */
 FDP.getPostData = function (dat) {
 
 	var data = {
@@ -166,13 +236,21 @@ FDP.getPostData = function (dat) {
 	});
 
 	return decodeURIComponent(qs.stringify(data));
-}
+};
 
+/**
+ * 更新某个 host 的 dns 记录
+ * @param  {String}    host 域名
+ * @return {Undefined}      无返回值
+ */
 FDP.updateDns = function (host) {
 	var hostName = host.substr(host.indexOf(".")+1);
 	var type = host.substr(0,host.indexOf("."));
 	var me = this;
 
+	me.debug("updateDns ...");
+
+	// 域名纪录 ID
 	requestWapper({
 		"uri":this.getReqUrl("domainInfo")
 		,"method":"post"
@@ -187,9 +265,13 @@ FDP.updateDns = function (host) {
 		} else {
 			domain_id = "";
 		}
+		me.debug("Domain id is : ",domain_id);
 		return domain_id;
 	})
 	.then(function(did){
+		// 获取配置的域名解析类型
+		// @todo 增加排除或配置项
+
 		var p = new Promise(function (resolve, reject) {
 			if (did) {
 				requestWapper({
@@ -199,9 +281,7 @@ FDP.updateDns = function (host) {
 					,"body":me.getPostData({"domain_id":did})
 				})
 				.then(function (re) {
-					if (me.debug){
-						logger.log(re);
-					}
+					me.debug(re);
 					var r_resp = getJson(re);
 					var records = [];
 
@@ -215,7 +295,6 @@ FDP.updateDns = function (host) {
 									records.push(item);
 								break;
 							}
-
 						});
 					}
 					resolve(records);
@@ -230,13 +309,15 @@ FDP.updateDns = function (host) {
 		return p;
 	})
 	.then(function (records) {
+		// 更新 dns
 		var re = {
 			"success":0
 			,"fail":0
 			,"len":records.length
 		};
 		var p = new Promise(function (resolve, reject) {
-			records.forEach(function (item) {
+			/*records.forEach(function (item) {
+				logger.info("Record Ddns Data : ",JSON.stringify(item));
 				requestWapper({
 					"uri":me.getReqUrl("recordDdns")
 					,"method":"post"
@@ -264,20 +345,40 @@ FDP.updateDns = function (host) {
 						resolve(re);
 					}
 				});
-			});
+			});*/
+			resolve(re);
 		});
 		return p;
 	})
+	// 都完成
 	.then(function (re) {
-		logger.log(re);
+		me.debug(re);
 		me.cb(re);
 	})
 	.catch(function(reason){
-		logger.log("Fail...");
-		logger.log(reason);
+		logger.error(reason);
 	});
+};
+
+/**
+ * 调试
+ * @return {Undefined} 无返回值
+ */
+FDP.debug = function () {
+	if (this.showDebug) {
+		logger.debug.apply(
+			logger
+			,toArray(arguments)
+		);
+	};
 }
 
+/**
+ * 命令行形式的调用函数
+ * @param  {Array}     argv 参数数组
+ * @return {Undefined}      无返回值
+ * @description 模块修改后还未测试过。。。
+ */
 function goFresh (argv) {
 	var hosts = [];
 	var chkReg = /^-(\w+)/;
@@ -299,9 +400,13 @@ function goFresh (argv) {
 	var fd = new FreshDns(conf);
 }
 
+/**
+ * 根据条件生成一个 md5 hash
+ * @return {String}
+ */
 function getMd5 () {
 	var conditions = {};
-	Array.prototype.slice.call(arguments).forEach(function(item,index){
+	toArray(arguments).forEach(function(item,index){
 		conditions[index] = item;
 	});
 	conditions = JSON.stringify(conditions);
@@ -310,7 +415,38 @@ function getMd5 () {
 		.digest("hex");
 }
 
-function go (req, conf, app) {
+// 缓存对象
+var LRU = require("lru-cache");
+var DNSPOD_CACHE = LRU({
+	"max":10
+	,"maxAge":1000 * 60 * 60 * 24
+});
+
+/**
+ * 获取文件记录数据
+ * @return {Object} Promise 对象
+ */
+function touchData () {
+	var ddnsData = DNSPOD_CACHE.get("ddns_dnspod");
+	if (ddnsData) {
+		return Promise.resolve(ddnsData);
+	}
+	return data.get("ddns")
+		.then(function(data){
+			DNSPOD_CACHE.set("ddns_dnspod",data);
+			return data;
+		})
+}
+
+/**
+ * 模块外部调用接口
+ * @param  {Object} req  请求对象
+ * @param  {Object} res  响应对象
+ * @param  {Object} conf 模块配置对象
+ * @param  {[type]} app  [description]
+ * @return {[type]}      [description]
+ */
+function go (req, res, conf, app) {
 	var status = false;
 	var conf = conf || {};
 	var chkAuth = conf.auth || false;
@@ -318,35 +454,51 @@ function go (req, conf, app) {
 	var check = true;
 
 	if (!logger) {
-		logger = app && app.get("logger") || console;
+		logger = app && app.get("log");
+		if (logger) {
+			logger = logger.getLogger("dnspod");
+		} else {
+			logger = console;
+		}
 	}
+	logger.info("DNSPOD online.");
 
 	if (chkAuth && query.tk && query.ts) {
-		var skey = getMd5(10337,"53cb7f0b0305304bff41264778b7bd98",req.ts,"digiaries@hotmail.com");
+		// 简单的授权验证
+		// @todo 待完善。。。
+		var skey = getMd5(conf.appid,conf.token,req.ts,conf.mail);
 		if (query.tk !== skey) {
 			check = false;
 		}
 	}
 
 	if (check && conf.appid && conf.token) {
-		var dnsConf = {
-			"l":conf.hosts
-			,"tid":[conf.appid]
-			,"token":[conf.token]
-		};
-		if (query.debug) {
-			dnsConf.debug = 1;
-		}
-		var fd = new FreshDns(dnsConf,function (re){
-			logger.log(re);
-			fd = null;
-		});
+		touchData()
+			.then(function(){
+				var dnsConf = {
+					"l":conf.hosts
+					,"tid":[conf.appid]
+					,"token":[conf.token]
+					,"req":req
+				};
+				if (query.debug) {
+					dnsConf.debug = 1;
+				}
+				var fd = new FreshDns(dnsConf,function (re){
+					fd = null;
+					res.status(200).send(re);
+				});
+			});
 	}
 
 	return status;
 }
 
 module.exports = go;
+
+module.exports.status = function () {
+
+};
 
 // console.log(process.argv);
 
