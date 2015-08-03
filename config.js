@@ -4,9 +4,10 @@ var priveConf = require("./conf/config.json");
 var CONF = {
 	"name":meta.name
 	,"version":meta.version
-	,"resTimeout":4000
+	,"resTimeout":6000
 	,"port":40001
 	,"isProd":false
+	,"debug":true
 	,"data":{
 		"ddns":"./data/ddns.json"
 	}
