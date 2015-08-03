@@ -14,19 +14,23 @@ function promiseFactory(handler) {
  */
 function get(type, key) {
 	return promiseFactory(function (resolve, reject){
-		if (!config.data[type]) {
+		file_path = config.data[type];
+		if (!file_path) {
 			reject();
 			return;
 		}
-		fs.readFile(config.data[type],{"encoding":"utf8"},function (err, file) {
-			if (err || !file) {
-				reject(err,file);
-			} else {
-				var data = JSON.parse(file);
-				data = (key && data[key] || null) || data;
-				resolve(data);
-			}
-		});
+		touch(file_path)
+			.then(function () {
+				fs.readFile(file_path,{"encoding":"utf8"},function (err, file) {
+					if (err || !file) {
+						reject(err,file);
+					} else {
+						var data = JSON.parse(file);
+						data = (key && data[key] || null) || data;
+						resolve(data);
+					}
+				});
+			});
 	});
 }
 
@@ -64,7 +68,6 @@ function touch (file_path, type, key, data) {
 					// 有数据则写入
 					get(type)
 						.then(function (filedata) {
-							console.log(filedata);
 							filedata[key] = filedata[key] || {};
 							filedata[key] = data;
 							writeFile(file_path, filedata)
@@ -125,7 +128,6 @@ exports.set = function (type, key, data) {
 			// 没设定的数据
 			reject();
 		}
-		
 	});
 }
 
