@@ -67,6 +67,15 @@ function getJsonHeader () {
  */
 function noop () {}
 
+// 缓存对象
+var LRU = require("lru-cache");
+var DNSPOD_CACHE = LRU({
+	"max":20
+	,"maxAge":1000 * 60 * 60 * 24
+});
+
+DNSPOD_CACHE.set("ddns_dnspod_status",{});
+
 /**
  * 刷新的构造函数
  * @param {Object}   conf 配置对象
@@ -242,6 +251,7 @@ FDP.getPostData = function (dat) {
  * 更新某个 host 的 dns 记录
  * @param  {String}    host 域名
  * @return {Undefined}      无返回值
+ * @todo 拆分里面的步骤
  */
 FDP.updateDns = function (host) {
 	var hostName = host.substr(host.indexOf(".")+1);
@@ -287,11 +297,13 @@ FDP.updateDns = function (host) {
 
 					if (r_resp && r_resp.status.code === "1") {
 						var did = r_resp.domain.id;
+						var dname = r_resp.domain.name;
 						r_resp.records.forEach(function (item) {
 							switch(item.type) {
 								case "A":
 								case "www":
 									item.did = did;
+									item.dname = dname;
 									records.push(item);
 								break;
 							}
@@ -314,10 +326,15 @@ FDP.updateDns = function (host) {
 			"success":0
 			,"fail":0
 			,"len":records.length
+			,"detail":{}
 		};
 		var p = new Promise(function (resolve, reject) {
 			records.forEach(function (item) {
 				logger.info("Record Ddns Data : ",JSON.stringify(item));
+				re.detail[item.dname] = {};
+				re.detail[item.dname][item.name] = {};
+				re.detail[item.dname][item.name].ip = me.n_ip;
+
 				requestWapper({
 					"uri":me.getReqUrl("recordDdns")
 					,"method":"post"
@@ -327,13 +344,21 @@ FDP.updateDns = function (host) {
 						,"record_id":item.id
 						,"sub_domain":item.name
 						,"record_line":"%E9%BB%98%E8%AE%A4"
+						,"value":me.n_ip
 					})
 				})
 				.then(function(rep){
 					var resp = getJson(rep);
+					var r_status;
 					if (resp && resp.status.code === "1") {
 						re.success += 1;
+						r_status = true;
+					} else {
+						re.fail += 1;
+						r_status = false;
 					}
+
+					re.detail[item.dname][item.name].status = r_status;
 
 					if ((re.success + re.fail) === re.len) {
 						resolve(re);
@@ -341,6 +366,8 @@ FDP.updateDns = function (host) {
 				})
 				.catch(function (){
 					re.fail += 1;
+					re.detail[item.dname][item.name].status = false;
+					// @todo 输出错误信息
 					if ((re.success + re.fail) === re.len) {
 						resolve(re);
 					}
@@ -353,6 +380,13 @@ FDP.updateDns = function (host) {
 	// 都完成
 	.then(function (re) {
 		me.debug(re);
+
+		var status = DNSPOD_CACHE.get("ddns_dnspod_status");
+		Object.keys(re.detail).forEach(function (key) {
+			status[key] = re.detail[key];
+		});
+		DNSPOD_CACHE.set("ddns_dnspod_status",status);
+
 		me.cb(re);
 	})
 	.catch(function(reason){
@@ -414,13 +448,6 @@ function getMd5 () {
 		.update(conditions, "utf8")
 		.digest("hex");
 }
-
-// 缓存对象
-var LRU = require("lru-cache");
-var DNSPOD_CACHE = LRU({
-	"max":10
-	,"maxAge":1000 * 60 * 60 * 24
-});
 
 /**
  * 获取文件记录数据
@@ -497,7 +524,8 @@ function go (req, res, conf, app) {
 module.exports = go;
 
 module.exports.status = function () {
-
+	var status = DNSPOD_CACHE.get("ddns_dnspod_status");
+	return status;
 };
 
 // console.log(process.argv);
