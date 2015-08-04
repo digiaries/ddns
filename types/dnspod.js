@@ -332,8 +332,12 @@ FDP.updateDns = function (host) {
 			records.forEach(function (item) {
 				logger.info("Record Ddns Data : ",JSON.stringify(item));
 				re.detail[item.dname] = {};
-				re.detail[item.dname][item.name] = {};
-				re.detail[item.dname][item.name].ip = me.n_ip;
+
+				// status 0,失败 1,成功 -1.正在更新
+				re.detail[item.dname][item.name] = {
+					"ip":me.n_ip
+					,"status":-1
+				};
 
 				requestWapper({
 					"uri":me.getReqUrl("recordDdns")
@@ -352,10 +356,10 @@ FDP.updateDns = function (host) {
 					var r_status;
 					if (resp && resp.status.code === "1") {
 						re.success += 1;
-						r_status = true;
+						r_status = 1;
 					} else {
 						re.fail += 1;
-						r_status = false;
+						r_status = 0;
 					}
 
 					re.detail[item.dname][item.name].status = r_status;
@@ -366,7 +370,7 @@ FDP.updateDns = function (host) {
 				})
 				.catch(function (){
 					re.fail += 1;
-					re.detail[item.dname][item.name].status = false;
+					re.detail[item.dname][item.name].status = 0;
 					// @todo 输出错误信息
 					if ((re.success + re.fail) === re.len) {
 						resolve(re);
