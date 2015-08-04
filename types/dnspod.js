@@ -316,7 +316,7 @@ FDP.updateDns = function (host) {
 			,"len":records.length
 		};
 		var p = new Promise(function (resolve, reject) {
-			/*records.forEach(function (item) {
+			records.forEach(function (item) {
 				logger.info("Record Ddns Data : ",JSON.stringify(item));
 				requestWapper({
 					"uri":me.getReqUrl("recordDdns")
@@ -345,8 +345,8 @@ FDP.updateDns = function (host) {
 						resolve(re);
 					}
 				});
-			});*/
-			resolve(re);
+			});
+			// resolve(re);
 		});
 		return p;
 	})
