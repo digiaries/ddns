@@ -1,9 +1,13 @@
 
 {
-	"name":"devDependencies"
+	"name":"ddns"
 	,"version":"1.0.1"
 	,"private":false
-	,"description":""
+	,"description":"被动 DDNS 解析（什么鬼。。。）"
+	,"repository": {
+		"type": "git"
+		,"url": "https://github.com/digiaries/ddns"
+	}
 	,"dependencies":{
 		"express":"4.13.1"
 		,"errorhandler":"1.4.1"
