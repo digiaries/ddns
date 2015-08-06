@@ -260,6 +260,7 @@ FDP.updateDns = function (host) {
 
 	me.debug("updateDns ...");
 
+	// @todo 利用 data 模块存储 domainId ，在检测到后不再去 dnspod 查询，需要提供强制刷新的参数或方法
 	// 域名纪录 ID
 	requestWapper({
 		"uri":this.getReqUrl("domainInfo")
@@ -331,7 +332,7 @@ FDP.updateDns = function (host) {
 		var p = new Promise(function (resolve, reject) {
 			records.forEach(function (item) {
 				logger.info("Record Ddns Data : ",JSON.stringify(item));
-				re.detail[item.dname] = {};
+				re.detail[item.dname] = re.detail[item.dname] || {};
 
 				// status 0,失败 1,成功 -1.正在更新
 				re.detail[item.dname][item.name] = {
@@ -363,12 +364,11 @@ FDP.updateDns = function (host) {
 					}
 
 					re.detail[item.dname][item.name].status = r_status;
-
 					if ((re.success + re.fail) === re.len) {
 						resolve(re);
 					}
 				})
-				.catch(function (){
+				.catch(function (err){
 					re.fail += 1;
 					re.detail[item.dname][item.name].status = 0;
 					// @todo 输出错误信息
@@ -383,7 +383,10 @@ FDP.updateDns = function (host) {
 	})
 	// 都完成
 	.then(function (re) {
-		me.debug(re);
+		me.debug(JSON.stringify(re));
+
+		// 写入本次的ip
+		data.set("ddns","ip",me.n_ip);
 
 		var status = DNSPOD_CACHE.get("ddns_dnspod_status");
 		Object.keys(re.detail).forEach(function (key) {
@@ -463,9 +466,9 @@ function touchData () {
 		return Promise.resolve(ddnsData);
 	}
 	return data.get("ddns")
-		.then(function(data){
-			DNSPOD_CACHE.set("ddns_dnspod",data);
-			return data;
+		.then(function(d_data){
+			DNSPOD_CACHE.set("ddns_dnspod",d_data);
+			return d_data;
 		})
 }
 
