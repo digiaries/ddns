@@ -154,6 +154,7 @@ function getNewIp(FD){
 		// 有指定则直接返回
 		return Promise.resolve(FD.n_ip);
 	}
+
 	if (FD && FD.req) {
 		var ip = common.getIp(FD.req);
 		if (ip) {
@@ -178,7 +179,7 @@ FDP.getIp = function (host) {
 			resolve();
 		} else {
 			me.debug("Get IP.");
-			getNewIp(this)
+			getNewIp(me)
 			.then(function (re) {
 				me.n_ip = String(re).trim();
 				me.debug('New IP >>> ',me.n_ip);
@@ -518,6 +519,7 @@ function go (req, res, conf, app) {
 				if (query.debug) {
 					dnsConf.debug = 1;
 				}
+
 				var fd = new FreshDns(dnsConf,function (re){
 					fd = null;
 					res.status(200).send(re);
