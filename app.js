@@ -9,7 +9,7 @@ console.log("Starting server.\n");
 
 console.log("Server config:");
 Object.keys(config).forEach(function (key) {
-	console.log("\t%s : %s",key,config[key]);
+	console.log("\t%s : %s",key,JSON.stringify(config[key]));
 });
 
 // nodejs 版本
