@@ -34,11 +34,15 @@ var logger = theLog.getLogger("global");
 app.set("log",theLog);
 app.set("logger",logger);
 
-
+var retry = 3;
 // 未知异常
 process.on("uncaughtException", function (err) {
 	logger.error("Uncaught exception:\n",err.stack);
-	app.listen(config.port);
+	if (retry) {
+		// 判断进程推出
+		// app.listen(config.port);
+		retry -= 1;
+	}
 });
 
 app.disable("x-powered-by");
