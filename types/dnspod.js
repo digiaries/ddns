@@ -2,7 +2,7 @@ var request = require("request");
 // require('request').debug = true;
 var dns = require("dns");
 var qs = require("querystring");
-var data = require("../modules/data");
+var storage = require("../modules/data");
 var common = require("../modules/common");
 var crypto = require("crypto");
 var logger;
@@ -272,9 +272,8 @@ FDP.getPostData = function (dat) {
  * @return {Object}          Promise 对象
  */
 FDP.getDomainInfo = function (hostName) {
-
 	var domainData = touchData(true);
-	var domainInfo = domainData && domainData.info || null;
+	var domainInfo = domainData && domainData[hostName] || null;
 
 	if (domainInfo && domainInfo.id) {
 		this.debug("Get domain id form cache, domain id is : ",domainInfo.id);
@@ -296,24 +295,41 @@ FDP.getDomainInfo = function (hostName) {
 		} else {
 			domain_id = "";
 		}
-		data.update("ddns",hostName,{"id":domain_id});
+		// ???
+		me.debug("Update domain id.",domain_id);
+
+
 		var mapData = {};
 		mapData[domain_id] = hostName;
-		data.update("ddns","map",mapData);
+
+		var updateData = {"map":mapData};
+		updateData[hostName] = {"id":domain_id};
+
+		storage.update("ddns",updateData);
+
 		me.debug("Domain id is : ",domain_id);
 		mapData = null;
+
 		return domain_id;
 	});
 };
 
-FDP.getRecorde = function(did) {
+/**
+ * 获取纪录的子域名
+ * @param  {Int}    did 域名id
+ * @return {Object}     Promise 对象
+ */
+FDP.getRecorde = function(did,hostName) {
 	if (did) {
 		var dnsData = touchData(true);
-		var hostName = dnsData.map && dnsData.map[did] || "";
+		hostName = hostName || dnsData.map && dnsData.map[did] || "";
+
+		console.log("hostName ?>>> ",hostName);
+
 		var domainData = dnsData[hostName] || {};
 		var recordes = domainData.recordes || null;
 
-		if {recordes} {
+		if (recordes) {
 			return Promise.resolve(recordes);
 		}
 		var me = this;
@@ -343,19 +359,87 @@ FDP.getRecorde = function(did) {
 				});
 			}
 			if (hostName) {
-				data.update("ddns",hostName,{"records":records});
+				me.debug("Update records data.",records);
+				storage.update("ddns",hostName,{"records":records});
 			}
-			resolve(records);
+			return records;
 		})
 		.catch(function (err) {
-			reject(err);
+			return Promise.reject(err);
 		});
 
 
 	} else {
-		return Promise.reject({"err","domain_id miss"});
+		return Promise.reject({"err":"domain_id miss"});
 	}
-}
+};
+
+/**
+ * 更新记录的 dns
+ * @param  {Array}  recordes 记录列表
+ * @return {Object}          Promise对象
+ */
+FDP.updateRecordes = function(records) {
+	var re = {
+		"success":0
+		,"fail":0
+		,"len":records.length
+		,"detail":{}
+	};
+	var me = this;
+	var p = new Promise(function (resolve, reject) {
+		/*records.forEach(function (item) {
+			logger.info("Record Ddns Data : ",JSON.stringify(item));
+			re.detail[item.dname] = re.detail[item.dname] || {};
+
+			// status 0,失败 1,成功 -1.正在更新
+			re.detail[item.dname][item.name] = {
+				"ip":me.n_ip
+				,"status":-1
+			};
+
+			requestWapper({
+				"uri":me.getReqUrl("recordDdns")
+				,"method":"post"
+				,"headers":getJsonHeader()
+				,"body":me.getPostData({
+					"domain_id":item.did
+					,"record_id":item.id
+					,"sub_domain":item.name
+					,"record_line":"%E9%BB%98%E8%AE%A4"
+					,"value":me.n_ip
+				})
+			})
+			.then(function(rep){
+				var resp = getJson(rep);
+				var r_status;
+				if (resp && resp.status.code === "1") {
+					re.success += 1;
+					r_status = 1;
+				} else {
+					re.fail += 1;
+					r_status = 0;
+				}
+
+				re.detail[item.dname][item.name].status = r_status;
+				if ((re.success + re.fail) === re.len) {
+					resolve(re);
+				}
+			})
+			.catch(function (err){
+				re.fail += 1;
+				re.detail[item.dname][item.name].status = 0;
+				// @todo 输出错误信息
+				if ((re.success + re.fail) === re.len) {
+					resolve(re);
+				}
+			});
+		});*/
+		resolve(re);
+		recordes = null;
+	});
+	return p;
+};
 
 /**
  * 更新某个 host 的 dns 记录
@@ -365,12 +449,12 @@ FDP.getRecorde = function(did) {
  */
 FDP.updateDns = function (host) {
 	var hasSubDomain = host.match(/\./g);
-	hasSubDomain = hasSubDomain && hasSubDomain > 2 ? true : false;
+	hasSubDomain = hasSubDomain && hasSubDomain.length > 1 ? true : false;
 	var hostName = hasSubDomain ? host.substr(host.indexOf(".")+1) : host;
 	// var type = host.substr(0,host.indexOf("."));
 	var me = this;
 
-	me.debug("updateDns ...");
+	me.debug("updateDns ...",hostName);
 
 	// @todo 利用 data 模块存储 domainId ，在检测到后不再去 dnspod 查询，需要提供强制刷新的参数或方法
 	// 域名纪录 ID
@@ -391,90 +475,34 @@ FDP.updateDns = function (host) {
 		me.debug("Domain id is : ",domain_id);
 		return domain_id;
 	})*/
-	getDomainInfo(hostName)
-	.then(function(did){
-		// 获取配置的域名解析类型
-		// @todo 增加排除或配置项
-		return me.getRecorde(did);
-	})
-	.then(function (records) {
-		// 更新 dns
-		var re = {
-			"success":0
-			,"fail":0
-			,"len":records.length
-			,"detail":{}
-		};
-		var p = new Promise(function (resolve, reject) {
-			records.forEach(function (item) {
-				logger.info("Record Ddns Data : ",JSON.stringify(item));
-				re.detail[item.dname] = re.detail[item.dname] || {};
+	this.getDomainInfo(hostName)
+		.then(function(did){
+			// 获取配置的域名解析类型
+			// @todo 增加排除或配置项
+			return me.getRecorde(did,hostName);
+		})
+		.then(function (records) {
+			// 更新 dns
+			return me.updateRecordes(records);
+		})
+		// 都完成
+		.then(function (re) {
+			me.debug(JSON.stringify(re));
 
-				// status 0,失败 1,成功 -1.正在更新
-				re.detail[item.dname][item.name] = {
-					"ip":me.n_ip
-					,"status":-1
-				};
+			// 写入本次的ip
+			// storage.set("ddns","ip",me.n_ip);
 
-				requestWapper({
-					"uri":me.getReqUrl("recordDdns")
-					,"method":"post"
-					,"headers":getJsonHeader()
-					,"body":me.getPostData({
-						"domain_id":item.did
-						,"record_id":item.id
-						,"sub_domain":item.name
-						,"record_line":"%E9%BB%98%E8%AE%A4"
-						,"value":me.n_ip
-					})
-				})
-				.then(function(rep){
-					var resp = getJson(rep);
-					var r_status;
-					if (resp && resp.status.code === "1") {
-						re.success += 1;
-						r_status = 1;
-					} else {
-						re.fail += 1;
-						r_status = 0;
-					}
-
-					re.detail[item.dname][item.name].status = r_status;
-					if ((re.success + re.fail) === re.len) {
-						resolve(re);
-					}
-				})
-				.catch(function (err){
-					re.fail += 1;
-					re.detail[item.dname][item.name].status = 0;
-					// @todo 输出错误信息
-					if ((re.success + re.fail) === re.len) {
-						resolve(re);
-					}
-				});
+			var status = DNSPOD_CACHE.get("ddns_dnspod_status");
+			Object.keys(re.detail).forEach(function (key) {
+				status[key] = re.detail[key];
 			});
-			// resolve(re);
+			DNSPOD_CACHE.set("ddns_dnspod_status",status);
+
+			me.cb(re);
+		})
+		.catch(function(reason){
+			logger.error(reason);
 		});
-		return p;
-	})
-	// 都完成
-	.then(function (re) {
-		me.debug(JSON.stringify(re));
-
-		// 写入本次的ip
-		// data.set("ddns","ip",me.n_ip);
-
-		var status = DNSPOD_CACHE.get("ddns_dnspod_status");
-		Object.keys(re.detail).forEach(function (key) {
-			status[key] = re.detail[key];
-		});
-		DNSPOD_CACHE.set("ddns_dnspod_status",status);
-
-		me.cb(re);
-	})
-	.catch(function(reason){
-		logger.error(reason);
-	});
 };
 
 /**
@@ -544,7 +572,7 @@ function touchData (noPromise) {
 	if (ddnsData) {
 		return Promise.resolve(ddnsData);
 	}
-	return data.get("ddns")
+	return storage.get("ddns")
 		.then(function(d_data){
 			DNSPOD_CACHE.set("ddns_dnspod",d_data);
 			return d_data;
@@ -597,7 +625,6 @@ function go (req, res, conf, app) {
 				if (query.debug) {
 					dnsConf.debug = 1;
 				}
-
 				var fd = new FreshDns(dnsConf,function (re){
 					fd = null;
 					res.status(200).send(re);
