@@ -211,11 +211,29 @@ FDP.fresh = function (host) {
 	this.debug("Fresh : ",host);
 	this.getIp(host)
 		.then(function () {
-			me.debug('Get IP Done,Next Setp.');
+			
 			if (me.n_ip !== me.o_ip) {
+				me.debug('IP changed.');
 				me.updateDns(host);
 			} else {
+				me.debug('IP unchange.');
 				me.setStatus(host, true);
+				var status = DNSPOD_CACHE.get("ddns_dnspod_status");
+				
+				var hasSubDomain = host.match(/\./g);
+				hasSubDomain = hasSubDomain && hasSubDomain > 2 ? true : false;
+				var hostName = hasSubDomain ? host.substr(host.indexOf(".")+1) : host;
+				var domain_status = status[hostName] || {};
+				var len = Object.keys(domain_status).length;
+
+				var re = {
+					"success":len
+					,"fail":0
+					,"len":len
+					,"detail":domain_status
+				};
+				me.cb(re);
+
 			}
 		});
 };
@@ -249,21 +267,114 @@ FDP.getPostData = function (dat) {
 };
 
 /**
+ * 获取域名信息
+ * @param  {String} hostName 域名
+ * @return {Object}          Promise 对象
+ */
+FDP.getDomainInfo = function (hostName) {
+
+	var domainData = touchData(true);
+	var domainInfo = domainData && domainData.info || null;
+
+	if (domainInfo && domainInfo.id) {
+		this.debug("Get domain id form cache, domain id is : ",domainInfo.id);
+		return Promise.resolve(domainInfo.id);
+	}
+
+	var me = this;
+	return requestWapper({
+		"uri":this.getReqUrl("domainInfo")
+		,"method":"post"
+		,"headers":getJsonHeader()
+		,"body":this.getPostData({"domain":hostName})
+	})
+	.then(function(re){
+		var resp = getJson(re);
+		var domain_id;
+		if (resp && resp.status.code === "1") {
+			domain_id = resp.domain.id;
+		} else {
+			domain_id = "";
+		}
+		data.update("ddns",hostName,{"id":domain_id});
+		var mapData = {};
+		mapData[domain_id] = hostName;
+		data.update("ddns","map",mapData);
+		me.debug("Domain id is : ",domain_id);
+		mapData = null;
+		return domain_id;
+	});
+};
+
+FDP.getRecorde = function(did) {
+	if (did) {
+		var dnsData = touchData(true);
+		var hostName = dnsData.map && dnsData.map[did] || "";
+		var domainData = dnsData[hostName] || {};
+		var recordes = domainData.recordes || null;
+
+		if {recordes} {
+			return Promise.resolve(recordes);
+		}
+		var me = this;
+		return requestWapper({
+			"uri":me.getReqUrl("recordList")
+			,"method":"post"
+			,"headers":getJsonHeader()
+			,"body":me.getPostData({"domain_id":did})
+		})
+		.then(function (re) {
+			me.debug(re);
+			var r_resp = getJson(re);
+			var records = [];
+
+			if (r_resp && r_resp.status.code === "1") {
+				var did = r_resp.domain.id;
+				var dname = r_resp.domain.name;
+				r_resp.records.forEach(function (item) {
+					switch(item.type) {
+						case "A":
+						case "www":
+							item.did = did;
+							item.dname = dname;
+							records.push(item);
+						break;
+					}
+				});
+			}
+			if (hostName) {
+				data.update("ddns",hostName,{"records":records});
+			}
+			resolve(records);
+		})
+		.catch(function (err) {
+			reject(err);
+		});
+
+
+	} else {
+		return Promise.reject({"err","domain_id miss"});
+	}
+}
+
+/**
  * 更新某个 host 的 dns 记录
  * @param  {String}    host 域名
  * @return {Undefined}      无返回值
  * @todo 拆分里面的步骤
  */
 FDP.updateDns = function (host) {
-	var hostName = host.substr(host.indexOf(".")+1);
-	var type = host.substr(0,host.indexOf("."));
+	var hasSubDomain = host.match(/\./g);
+	hasSubDomain = hasSubDomain && hasSubDomain > 2 ? true : false;
+	var hostName = hasSubDomain ? host.substr(host.indexOf(".")+1) : host;
+	// var type = host.substr(0,host.indexOf("."));
 	var me = this;
 
 	me.debug("updateDns ...");
 
 	// @todo 利用 data 模块存储 domainId ，在检测到后不再去 dnspod 查询，需要提供强制刷新的参数或方法
 	// 域名纪录 ID
-	requestWapper({
+	/*requestWapper({
 		"uri":this.getReqUrl("domainInfo")
 		,"method":"post"
 		,"headers":getJsonHeader()
@@ -279,48 +390,12 @@ FDP.updateDns = function (host) {
 		}
 		me.debug("Domain id is : ",domain_id);
 		return domain_id;
-	})
+	})*/
+	getDomainInfo(hostName)
 	.then(function(did){
 		// 获取配置的域名解析类型
 		// @todo 增加排除或配置项
-
-		var p = new Promise(function (resolve, reject) {
-			if (did) {
-				requestWapper({
-					"uri":me.getReqUrl("recordList")
-					,"method":"post"
-					,"headers":getJsonHeader()
-					,"body":me.getPostData({"domain_id":did})
-				})
-				.then(function (re) {
-					me.debug(re);
-					var r_resp = getJson(re);
-					var records = [];
-
-					if (r_resp && r_resp.status.code === "1") {
-						var did = r_resp.domain.id;
-						var dname = r_resp.domain.name;
-						r_resp.records.forEach(function (item) {
-							switch(item.type) {
-								case "A":
-								case "www":
-									item.did = did;
-									item.dname = dname;
-									records.push(item);
-								break;
-							}
-						});
-					}
-					resolve(records);
-				})
-				.catch(function (err) {
-					reject(err);
-				});
-			} else {
-				reject(err);
-			}
-		});
-		return p;
+		return me.getRecorde(did);
 	})
 	.then(function (records) {
 		// 更新 dns
@@ -387,7 +462,7 @@ FDP.updateDns = function (host) {
 		me.debug(JSON.stringify(re));
 
 		// 写入本次的ip
-		data.set("ddns","ip",me.n_ip);
+		// data.set("ddns","ip",me.n_ip);
 
 		var status = DNSPOD_CACHE.get("ddns_dnspod_status");
 		Object.keys(re.detail).forEach(function (key) {
@@ -461,8 +536,11 @@ function getMd5 () {
  * 获取文件记录数据
  * @return {Object} Promise 对象
  */
-function touchData () {
+function touchData (noPromise) {
 	var ddnsData = DNSPOD_CACHE.get("ddns_dnspod");
+	if (noPromise) {
+		return ddnsData || null;
+	}
 	if (ddnsData) {
 		return Promise.resolve(ddnsData);
 	}
