@@ -118,7 +118,7 @@ function FreshDns (conf,cb) {
 	this.cb = cb || noop;
 
 	this.hosts.forEach(function (host) {
-		this.debug("The host >>> ",host);
+		this.debug("Host >>> ",host);
 		this.setStatus(host, false)
 			.fresh(host);
 	}.bind(this));
@@ -208,7 +208,7 @@ FDP.getIp = function (host) {
  */
 FDP.fresh = function (host) {
 	var me = this;
-	this.debug("Fresh : ",host);
+	this.debug("Fresh >>> ",host);
 	this.getIp(host)
 		.then(function () {
 			
@@ -295,9 +295,8 @@ FDP.getDomainInfo = function (hostName) {
 		} else {
 			domain_id = "";
 		}
-		// ???
-		me.debug("Update domain id.",domain_id);
 
+		me.debug("Get domain id.",domain_id);
 
 		var mapData = {};
 		mapData[domain_id] = hostName;
@@ -307,7 +306,6 @@ FDP.getDomainInfo = function (hostName) {
 
 		storage.update("ddns",updateData);
 
-		me.debug("Domain id is : ",domain_id);
 		mapData = null;
 
 		return domain_id;
@@ -324,13 +322,12 @@ FDP.getRecorde = function(did,hostName) {
 		var dnsData = touchData(true);
 		hostName = hostName || dnsData.map && dnsData.map[did] || "";
 
-		console.log("hostName ?>>> ",hostName);
-
 		var domainData = dnsData[hostName] || {};
-		var recordes = domainData.recordes || null;
+		var records = domainData.records || null;
 
-		if (recordes) {
-			return Promise.resolve(recordes);
+		if (records) {
+			this.debug("Get records form cache,records : ",JSON.stringify(records));
+			return Promise.resolve(records);
 		}
 		var me = this;
 		return requestWapper({
@@ -340,7 +337,7 @@ FDP.getRecorde = function(did,hostName) {
 			,"body":me.getPostData({"domain_id":did})
 		})
 		.then(function (re) {
-			me.debug(re);
+			me.debug("Origin record data : ",re);
 			var r_resp = getJson(re);
 			var records = [];
 
@@ -359,7 +356,7 @@ FDP.getRecorde = function(did,hostName) {
 				});
 			}
 			if (hostName) {
-				me.debug("Update records data.",records);
+				me.debug("Update records data.",JSON.stringify(records));
 				storage.update("ddns",hostName,{"records":records});
 			}
 			return records;
@@ -376,7 +373,7 @@ FDP.getRecorde = function(did,hostName) {
 
 /**
  * 更新记录的 dns
- * @param  {Array}  recordes 记录列表
+ * @param  {Array}  records 记录列表
  * @return {Object}          Promise对象
  */
 FDP.updateRecordes = function(records) {
@@ -436,7 +433,7 @@ FDP.updateRecordes = function(records) {
 			});
 		});*/
 		resolve(re);
-		recordes = null;
+		records = null;
 	});
 	return p;
 };
@@ -454,27 +451,10 @@ FDP.updateDns = function (host) {
 	// var type = host.substr(0,host.indexOf("."));
 	var me = this;
 
-	me.debug("updateDns ...",hostName);
+	me.debug("Update dns >>> ",hostName);
 
 	// @todo 利用 data 模块存储 domainId ，在检测到后不再去 dnspod 查询，需要提供强制刷新的参数或方法
 	// 域名纪录 ID
-	/*requestWapper({
-		"uri":this.getReqUrl("domainInfo")
-		,"method":"post"
-		,"headers":getJsonHeader()
-		,"body":this.getPostData({"domain":hostName})
-	})
-	.then(function(re){
-		var resp = getJson(re);
-		var domain_id;
-		if (resp && resp.status.code === "1") {
-			domain_id = resp.domain.id;
-		} else {
-			domain_id = "";
-		}
-		me.debug("Domain id is : ",domain_id);
-		return domain_id;
-	})*/
 	this.getDomainInfo(hostName)
 		.then(function(did){
 			// 获取配置的域名解析类型
@@ -487,6 +467,7 @@ FDP.updateDns = function (host) {
 		})
 		// 都完成
 		.then(function (re) {
+
 			me.debug(JSON.stringify(re));
 
 			// 写入本次的ip
