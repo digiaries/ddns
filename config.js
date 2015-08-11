@@ -4,7 +4,7 @@ var priveConf = require("./conf/config.json");
 var CONF = {
 	"name":meta.name
 	,"version":meta.version
-	,"resTimeout":6000
+	,"resTimeout":10000
 	,"port":40001
 	,"isProd":false
 	,"debug":true
