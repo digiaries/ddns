@@ -182,16 +182,14 @@ FDP.getIp = function (host) {
 			getNewIp(me)
 			.then(function (re) {
 				me.n_ip = String(re).trim();
-				me.debug('New IP >>> ',me.n_ip);
+				me.debug("New IP >>> ",me.n_ip);
 				dns.lookup(host, function (err, add) {
-					me.o_ip = add || '';
+					me.o_ip = add || "";
 					if (err) {
-						if (me.debug) {
-							logger.debug(err);
-						}
+						logger.debug("Dns lookup failed. ",err);
 						reject(err);
 					} else {
-						me.debug('Old IP >>> ',me.o_ip);
+						me.debug("Old IP >>> ",me.o_ip);
 						resolve();
 					}
 				});
@@ -213,10 +211,10 @@ FDP.fresh = function (host) {
 		.then(function () {
 			
 			if (me.n_ip !== me.o_ip) {
-				me.debug('IP changed.');
+				me.debug("IP changed.");
 				me.updateDns(host);
 			} else {
-				me.debug('IP unchange.');
+				me.debug("IP unchange.");
 				me.setStatus(host, true);
 				var status = DNSPOD_CACHE.get("ddns_dnspod_status");
 				
