@@ -385,7 +385,7 @@ FDP.updateRecordes = function(records) {
 	};
 	var me = this;
 	var p = new Promise(function (resolve, reject) {
-		/*records.forEach(function (item) {
+		records.forEach(function (item) {
 			logger.info("Record Ddns Data : ",JSON.stringify(item));
 			re.detail[item.dname] = re.detail[item.dname] || {};
 
@@ -431,8 +431,8 @@ FDP.updateRecordes = function(records) {
 					resolve(re);
 				}
 			});
-		});*/
-		resolve(re);
+		});
+		// resolve(re);
 		records = null;
 	});
 	return p;
