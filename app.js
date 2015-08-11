@@ -20,6 +20,7 @@ nodeVer[1] = Number(nodeVer[1]);
 console.log("Nodejs version : %s ",nodeVer[1]);
 
 // 如果node的版本小于12，则手动导入 promise 模块
+// @todo 判断是否有带标示
 if (nodeVer[1] < 12) {
     global.Promise = require("promise");
 }
@@ -39,7 +40,7 @@ var retry = 3;
 process.on("uncaughtException", function (err) {
 	logger.error("Uncaught exception:\n",err.stack);
 	if (retry) {
-		// 判断进程推出
+		// @todo 判断进程推出
 		// app.listen(config.port);
 		retry -= 1;
 	}
